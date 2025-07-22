@@ -42,7 +42,9 @@ const api = {
             
             actualizarVista();
         } catch (error) { 
-            console.error("Error al cargar:", error); 
+            console.error("Error al cargar:", error);
+            // Si hay error, al menos mostrar la vista vacía
+            actualizarVista();
         }
     },
 
@@ -128,7 +130,7 @@ function mostrarModalItem(itemId) {
     const container = document.getElementById('listaMetodos');
     const esDevolucion = !!item.documento.trim();
     
-    document.querySelector('.modal-header h2').textContent = `${esDevolucion ? 'Devolver' : ''} Equipo ${item.nombre}`;
+    document.querySelector('.modal-header h2').textContent = `${esDevolucion ? 'Devolver' : 'Prestar'} Equipo ${item.nombre}`;
     document.querySelector('.modal-body p').textContent = esDevolucion ? 
         'Información del Préstamo Activo:' : 'Complete la información del Préstamo:';
 
@@ -146,8 +148,8 @@ function mostrarModalItem(itemId) {
                 <div><label for="comentario">Comentario de Devolución (opcional):</label>
                 <textarea id="comentario" rows="4" placeholder="Observaciones sobre el estado del equipo..."></textarea></div>
                 <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                    <button id="btnGuardar" style="background-color: #dc3545; color: white;">Registrar Devolución</button>
-                    <button id="btnCancelar" style="background-color: #6c757d; color: white;">Cancelar</button>
+                    <button id="btnGuardar" style="background-color: #dc3545; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer;">Registrar Devolución</button>
+                    <button id="btnCancelar" style="background-color: #6c757d; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer;">Cancelar</button>
                 </div>
             </div>`;
             
@@ -168,8 +170,8 @@ function mostrarModalItem(itemId) {
                 ${crearInput('profesor', 'Profesor(a) Encargado', 'text', 'Ingrese el nombre del profesor(a)...', false, item.profesor)}
                 ${crearInput('materia', 'Materia', 'text', 'Ingrese la materia...', false, item.materia)}
                 <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                    <button id="btnGuardar" style="background-color: #007bff; color: white;">Registrar Préstamo</button>
-                    <button id="btnCancelar" style="background-color: #6c757d; color: white;">Cancelar</button>
+                    <button id="btnGuardar" style="background-color: #007bff; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer;">Registrar Préstamo</button>
+                    <button id="btnCancelar" style="background-color: #6c757d; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer;">Cancelar</button>
                 </div>
             </div>`;
 
@@ -235,14 +237,52 @@ function mostrarModalItem(itemId) {
 
 // --- UI ---
 const actualizarVista = () => {
-    document.getElementById("malla").innerHTML = items.map(item => {
+    const contenedor = document.getElementById("malla");
+    
+    if (!contenedor) {
+        console.error('Error: No se encontró el elemento con id "malla"');
+        return;
+    }
+    
+    console.log('Actualizando vista con', items.length, 'items');
+    
+    contenedor.innerHTML = items.map(item => {
         const ocupado = !!item.documento;
-        return `<div class="ramo" style="background-color: ${ocupado ? '#d4edda' : '#f8f9fa'}; border-color: ${ocupado ? '#28a745' : '#ccc'};" onclick="mostrarModalItem('${item.id}')">
-                    <div style="font-weight: bold;">${item.nombre}</div>
-                    <div style="color: ${ocupado ? 'green' : '#6c757d'};">${ocupado ? '✓' : '○'}</div>
-                    ${ocupado ? `<div style="font-size: 0.8em; color: #666; margin-top: 5px;">${item.nombreCompleto}</div>` : ''}
-                </div>`;
+        return `
+            <div class="ramo" 
+                 style="
+                    background-color: ${ocupado ? '#d4edda' : '#f8f9fa'}; 
+                    border: 2px solid ${ocupado ? '#28a745' : '#ccc'}; 
+                    border-radius: 8px;
+                    padding: 15px;
+                    margin: 5px;
+                    cursor: pointer;
+                    text-align: center;
+                    min-height: 80px;
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: center;
+                    align-items: center;
+                    transition: all 0.3s ease;
+                 " 
+                 onclick="mostrarModalItem('${item.id}')"
+                 onmouseover="this.style.transform='scale(1.02)'"
+                 onmouseout="this.style.transform='scale(1)'">
+                <div style="font-weight: bold; font-size: 1.2em;">${item.nombre}</div>
+                <div style="color: ${ocupado ? 'green' : '#6c757d'}; font-size: 1.5em; margin: 5px 0;">
+                    ${ocupado ? '✓' : '○'}
+                </div>
+                ${ocupado ? `
+                    <div style="font-size: 0.8em; color: #666; margin-top: 5px; text-align: center;">
+                        <strong>${item.nombreCompleto || 'Sin nombre'}</strong><br>
+                        <small>${item.curso || 'Sin curso'}</small>
+                    </div>
+                ` : ''}
+            </div>
+        `;
     }).join('');
+    
+    console.log('Vista actualizada correctamente');
 };
 
 function resetearMalla() {
@@ -258,23 +298,57 @@ function resetearMalla() {
     }
 }
 
-const cerrarModal = () => document.getElementById('modalMetodos').style.display = 'none';
+const cerrarModal = () => {
+    const modal = document.getElementById('modalMetodos');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+};
 
 // --- EVENTOS ---
-window.onclick = e => e.target === document.getElementById('modalMetodos') && cerrarModal();
-document.addEventListener('keydown', e => e.key === 'Escape' && cerrarModal());
-document.addEventListener('DOMContentLoaded', () => {
-    api.cargarEquipos();
-    setInterval(api.cargarEquipos, 30000);
+window.onclick = e => {
+    const modal = document.getElementById('modalMetodos');
+    if (e.target === modal) cerrarModal();
+};
+
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') cerrarModal();
 });
 
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM cargado, inicializando...');
+    
+    // Verificar que existan los elementos necesarios
+    const malla = document.getElementById('malla');
+    const modal = document.getElementById('modalMetodos');
+    
+    if (!malla) {
+        console.error('Error: No se encontró el elemento con id "malla"');
+        return;
+    }
+    
+    if (!modal) {
+        console.error('Error: No se encontró el elemento con id "modalMetodos"');
+        return;
+    }
+    
+    console.log('Elementos encontrados, cargando equipos...');
+    
+    // Mostrar equipos inmediatamente (vista inicial)
+    actualizarVista();
+    
+    // Cargar datos del servidor
+    api.cargarEquipos();
+    
+    // Actualizar cada 30 segundos
+    setInterval(api.cargarEquipos, 30000);
+    
+    console.log('Sistema iniciado correctamente');
+});
 
-const items = Array.from({length: 50}, (_, i) => ({
-    id: `item_${i+1}`,
-    nombre: `${i+1}`,
-    documento: "",
-    profesor: "",
-    materia: "",
-    nombreCompleto: "",
-    curso: ""
-}));
+// Función auxiliar para debug
+window.debugItems = () => {
+    console.log('Items actuales:', items);
+    console.log('Elemento malla:', document.getElementById('malla'));
+    console.log('Elemento modal:', document.getElementById('modalMetodos'));
+};
