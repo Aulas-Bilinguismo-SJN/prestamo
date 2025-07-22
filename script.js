@@ -199,12 +199,8 @@ function mostrarModalItem(itemId) {
     const item = items.find(i => i.id === itemId);
     if (!item) return;
 
-    // Verificar si el equipo está prestado (tiene documento asignado)
-    if (item.documento && item.documento.trim() !== '') {
-        return mostrarModalDesmarcar(itemId);
-    }
+    if (item.documento.trim()) return mostrarModalDesmarcar(itemId);
 
-    // Si no está prestado, mostrar modal de préstamo
     const modal = document.getElementById('modalMetodos');
     const container = document.getElementById('listaMetodos');
     
@@ -312,48 +308,27 @@ function mostrarModalDesmarcar(itemId) {
     const item = items.find(i => i.id === itemId);
     if (!item) return;
 
-    console.log('Mostrando modal de devolución para:', item); // Debug
-
     const modal = document.getElementById('modalMetodos');
     const container = document.getElementById('listaMetodos');
     
-    // Verificar que el modal existe
-    if (!modal || !container) {
-        console.error('No se encontró el modal o el container');
-        return;
-    }
-
     document.querySelector('.modal-header h2').textContent = `Devolver Equipo ${item.nombre}`;
     document.querySelector('.modal-body p').textContent = 'Información del Préstamo Activo:';
 
     const form = document.createElement('div');
     form.style.cssText = 'display: flex; flex-direction: column; gap: 15px;';
-    form.innerHTML = `<div class="readonly-info" style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; border: 1px solid #dee2e6;">
-        <p style="margin: 0 0 5px 0;"><strong>Estudiante:</strong></p>
-        <div class="info-content" style="margin-bottom: 10px; padding: 5px; background-color: white; border-radius: 3px;">${item.nombreCompleto || 'Sin información'}</div>
-        
-        <p style="margin: 0 0 5px 0;"><strong>Documento:</strong></p>
-        <div class="info-content" style="margin-bottom: 10px; padding: 5px; background-color: white; border-radius: 3px;">${item.documento || 'Sin información'}</div>
-        
-        <p style="margin: 0 0 5px 0;"><strong>Curso:</strong></p>
-        <div class="info-content" style="margin-bottom: 10px; padding: 5px; background-color: white; border-radius: 3px;">${item.curso || 'Sin información'}</div>
-        
-        <p style="margin: 0 0 5px 0;"><strong>Profesor(a):</strong></p>
-        <div class="info-content" style="margin-bottom: 10px; padding: 5px; background-color: white; border-radius: 3px;">${item.profesor || 'Sin profesor'}</div>
-        
-        <p style="margin: 0 0 5px 0;"><strong>Materia:</strong></p>
-        <div class="info-content" style="margin-bottom: 0; padding: 5px; background-color: white; border-radius: 3px;">${item.materia || 'Sin materia'}</div>
+    form.innerHTML = `<div class="readonly-info">
+        <p><strong>Estudiante:</strong></p><div class="info-content">${item.nombreCompleto || 'Sin información'}</div>
+        <p><strong>Documento:</strong></p><div class="info-content">${item.documento || 'Sin información'}</div>
+        <p><strong>Curso:</strong></p><div class="info-content">${item.curso || 'Sin información'}</div>
+        <p><strong>Profesor(a):</strong></p><div class="info-content">${item.profesor || 'Sin profesor'}</div>
+        <p><strong>Materia:</strong></p><div class="info-content">${item.materia || 'Sin materia'}</div>
     </div>
-    <div>
-        <label for="comentario">Comentario de Devolución (opcional):</label>
-        <textarea id="comentario" rows="4" placeholder="Observaciones sobre el estado del equipo..." style="width: 100%; margin-top: 5px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; resize: vertical;"></textarea>
-    </div>`;
+    <div><label for="comentario">Comentario de Devolución (opcional):</label>
+    <textarea id="comentario" rows="4" placeholder="Observaciones sobre el estado del equipo..."></textarea></div>`;
 
     form.appendChild(crearBotones('Registrar Devolución', 'delete-modal-btn', async () => {
         const comentario = document.getElementById('comentario').value.trim();
         if (confirm(`¿Confirma la devolución del equipo ${item.nombre}?`)) {
-            
-            console.log('Registrando devolución...'); // Debug
             
             // Registrar devolución en BaseB con comentario
             await api.guardarDevolucion(item, comentario);
@@ -379,8 +354,6 @@ function mostrarModalDesmarcar(itemId) {
     container.innerHTML = '';
     container.appendChild(form);
     modal.style.display = 'block';
-    
-    console.log('Modal de devolución mostrado'); // Debug
 }
 
 // --- UI FUNCTIONS ---
