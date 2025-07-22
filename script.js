@@ -4,7 +4,8 @@ for (let i = 1; i <= 50; i++) {
         id: `item_${i}`,
         nombre: `${i}`,
         documento: "",
-        profesor: ""
+        profesor: "",
+        materia: ""
     });
 }
 
@@ -23,6 +24,7 @@ function cargarDatosDesdeGoogleSheet() {
                 if (fila) {
                     item.documento = fila[1] || "";
                     item.profesor = fila[2] || "";
+                    item.materia = fila[3] || "";
                 }
             });
             actualizarVista();
@@ -35,7 +37,8 @@ function guardarEnGoogleSheet(item) {
     const datos = {
         item: item.nombre,
         documento: item.documento,
-        profesor: item.profesor
+        profesor: item.profesor,
+        materia: item.materia
     };
 
     fetch(SCRIPT_URL, {
@@ -80,6 +83,12 @@ function mostrarModalItem(itemId) {
         <input type="text" id="profesor" value="${item.profesor}" placeholder="Ingrese el nombre del profesor(a)...">
     `;
 
+    const divMateria = document.createElement('div');
+    divMateria.innerHTML = `
+        <label for="materia">Materia:</label>
+        <input type="text" id="materia" value="${item.materia}" placeholder="Ingrese la materia...">
+    `;
+
     const divBotones = document.createElement('div');
     divBotones.style.display = 'flex';
     divBotones.style.gap = '10px';
@@ -98,9 +107,11 @@ function mostrarModalItem(itemId) {
     btnGuardar.addEventListener('click', () => {
         const documento = document.getElementById('documento').value.trim();
         const profesor = document.getElementById('profesor').value.trim();
+        const materia = document.getElementById('materia').value.trim();
 
         item.documento = documento;
         item.profesor = profesor;
+        item.materia = materia;
 
         guardarEnGoogleSheet(item);
         cerrarModal();
@@ -110,7 +121,7 @@ function mostrarModalItem(itemId) {
     btnCancelar.addEventListener('click', cerrarModal);
 
     divBotones.append(btnGuardar, btnCancelar);
-    formulario.append(divDocumento, divProfesor, divBotones);
+    formulario.append(divDocumento, divProfesor, divMateria, divBotones);
     listaMetodos.appendChild(formulario);
 
     modal.style.display = 'block';
@@ -139,6 +150,8 @@ function mostrarModalDesmarcar(itemId) {
         <div class="info-content">${item.documento || 'Sin documento'}</div>
         <p><strong>Profesor(a) Encargado:</strong></p>
         <div class="info-content">${item.profesor || 'Sin profesor'}</div>
+        <p><strong>Materia:</strong></p>
+        <div class="info-content">${item.materia || 'Sin materia'}</div>
     `;
 
     const divComentario = document.createElement('div');
@@ -166,6 +179,7 @@ function mostrarModalDesmarcar(itemId) {
         if (confirm(`¿Deseas desmarcar el equipo ${item.nombre}?`)) {
             item.documento = "";
             item.profesor = "";
+            item.materia = "";
 
             // (opcional: guardar comentario)
             console.log(`Desmarcado: ${item.nombre}, Comentario: ${comentario}`);
@@ -220,6 +234,7 @@ function resetearMalla() {
         items.forEach(item => {
             item.documento = "";
             item.profesor = "";
+            item.materia = "";
         });
         actualizarVista();
     }
