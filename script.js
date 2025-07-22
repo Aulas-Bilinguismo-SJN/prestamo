@@ -14,28 +14,67 @@ const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxdigcfuoeHycEROAQ2z
 
 // --- FUNCIONES DE CARGA Y GUARDADO ---
 
-// Cargar datos desde BaseA (GET)
-function cargarDatosDesdeGoogleSheet() {
-    fetch(SCRIPT_URL)
+// Cargar equipos ocupados desde BaseB (GET)
+function cargarEquiposOcupados() {
+    fetch(`${SCRIPT_URL}?action=getBaseB`)
         .then(response => response.json())
         .then(data => {
-            items.forEach((item, index) => {
-                const fila = data[index + 1]; // fila 0 es encabezado
-                if (fila) {
-                    item.documento = fila[1] || "";
-                    item.profesor = fila[2] || "";
-                    item.materia = fila[3] || "";
-                }
+            // Resetear todos los equipos primero
+            items.forEach(item => {
+                item.documento = "";
+                item.profesor = "";
+                item.materia = "";
             });
+
+            // Cargar solo los equipos que están en BaseB (ocupados)
+            if (data && Array.isArray(data)) {
+                data.forEach(fila => {
+                    if (fila && fila.length >= 4) {
+                        const numeroEquipo = fila[0]; // Número del equipo
+                        const documento = fila[1];
+                        const profesor = fila[2];
+                        const materia = fila[3];
+                        
+                        // Buscar el equipo correspondiente
+                        const item = items.find(i => i.nombre === numeroEquipo.toString());
+                        if (item) {
+                            item.documento = documento || "";
+                            item.profesor = profesor || "";
+                            item.materia = materia || "";
+                        }
+                    }
+                });
+            }
             actualizarVista();
         })
-        .catch(error => console.error("Error al cargar datos:", error));
+        .catch(error => console.error("Error al cargar equipos ocupados:", error));
 }
 
-// Guardar en BaseB (POST)
-function guardarEnGoogleSheet(item) {
+// Buscar estudiante en BaseA por documento
+function buscarEstudianteEnBaseA(documento) {
+    return fetch(`${SCRIPT_URL}?action=getBaseA&documento=${encodeURIComponent(documento)}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data && data.encontrado) {
+                return {
+                    nombre: data.nombre,
+                    curso: data.curso,
+                    encontrado: true
+                };
+            }
+            return { encontrado: false };
+        })
+        .catch(error => {
+            console.error("Error al buscar estudiante:", error);
+            return { encontrado: false };
+        });
+}
+
+// Guardar equipo ocupado en BaseB (POST)
+function guardarEquipoEnBaseB(item) {
     const datos = {
-        item: item.nombre,
+        action: 'saveToBaseB',
+        numeroEquipo: item.nombre,
         documento: item.documento,
         profesor: item.profesor,
         materia: item.materia
@@ -46,7 +85,22 @@ function guardarEnGoogleSheet(item) {
         mode: 'no-cors',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(datos)
-    }).catch(error => console.error("Error al guardar:", error));
+    }).catch(error => console.error("Error al guardar en BaseB:", error));
+}
+
+// Eliminar equipo de BaseB
+function eliminarEquipoDeBaseB(numeroEquipo) {
+    const datos = {
+        action: 'deleteFromBaseB',
+        numeroEquipo: numeroEquipo
+    };
+
+    fetch(SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(datos)
+    }).catch(error => console.error("Error al eliminar de BaseB:", error));
 }
 
 // --- MODAL: MARCAR Y DESMARCAR ---
@@ -73,8 +127,21 @@ function mostrarModalItem(itemId) {
 
     const divDocumento = document.createElement('div');
     divDocumento.innerHTML = `
-        <label for="documento">Documento:</label>
-        <textarea id="documento" rows="3" placeholder="Ingrese el documento...">${item.documento}</textarea>
+        <label for="documento">Documento del Estudiante:</label>
+        <input type="text" id="documento" value="${item.documento}" placeholder="Ingrese el número de documento...">
+        <small id="buscarInfo" style="color: #6c757d;">Ingrese el documento para buscar automáticamente el estudiante</small>
+    `;
+
+    const divNombreEstudiante = document.createElement('div');
+    divNombreEstudiante.innerHTML = `
+        <label for="nombreEstudiante">Nombre del Estudiante:</label>
+        <input type="text" id="nombreEstudiante" readonly placeholder="Se completará automáticamente...">
+    `;
+
+    const divCurso = document.createElement('div');
+    divCurso.innerHTML = `
+        <label for="curso">Curso:</label>
+        <input type="text" id="curso" readonly placeholder="Se completará automáticamente...">
     `;
 
     const divProfesor = document.createElement('div');
@@ -98,22 +165,72 @@ function mostrarModalItem(itemId) {
     btnGuardar.textContent = 'Guardar';
     btnGuardar.style.backgroundColor = '#007bff';
     btnGuardar.style.color = 'white';
+    btnGuardar.disabled = true; // Deshabilitado hasta que se encuentre el estudiante
 
     const btnCancelar = document.createElement('button');
     btnCancelar.textContent = 'Cancelar';
     btnCancelar.style.backgroundColor = '#6c757d';
     btnCancelar.style.color = 'white';
 
+    // Event listener para buscar automáticamente cuando se ingrese el documento
+    let timerBusqueda;
+    document.getElementById('documento').addEventListener('input', function(e) {
+        const documento = e.target.value.trim();
+        const infoElement = document.getElementById('buscarInfo');
+        const nombreInput = document.getElementById('nombreEstudiante');
+        const cursoInput = document.getElementById('curso');
+        
+        // Limpiar timer anterior
+        clearTimeout(timerBusqueda);
+        
+        if (documento.length >= 3) { // Buscar cuando tenga al menos 3 dígitos
+            infoElement.textContent = 'Buscando estudiante...';
+            infoElement.style.color = '#ffc107';
+            
+            timerBusqueda = setTimeout(() => {
+                buscarEstudianteEnBaseA(documento).then(resultado => {
+                    if (resultado.encontrado) {
+                        nombreInput.value = resultado.nombre;
+                        cursoInput.value = resultado.curso;
+                        infoElement.textContent = '✓ Estudiante encontrado';
+                        infoElement.style.color = '#28a745';
+                        btnGuardar.disabled = false;
+                    } else {
+                        nombreInput.value = '';
+                        cursoInput.value = '';
+                        infoElement.textContent = '⚠ Estudiante no encontrado en la base de datos';
+                        infoElement.style.color = '#dc3545';
+                        btnGuardar.disabled = true;
+                    }
+                });
+            }, 500); // Esperar 500ms después de que el usuario deje de escribir
+        } else {
+            nombreInput.value = '';
+            cursoInput.value = '';
+            infoElement.textContent = 'Ingrese el documento para buscar automáticamente el estudiante';
+            infoElement.style.color = '#6c757d';
+            btnGuardar.disabled = true;
+        }
+    });
+
     btnGuardar.addEventListener('click', () => {
         const documento = document.getElementById('documento').value.trim();
+        const nombreEstudiante = document.getElementById('nombreEstudiante').value.trim();
+        const curso = document.getElementById('curso').value.trim();
         const profesor = document.getElementById('profesor').value.trim();
         const materia = document.getElementById('materia').value.trim();
 
-        item.documento = documento;
+        if (!documento || !nombreEstudiante || !profesor || !materia) {
+            alert('Por favor complete todos los campos obligatorios');
+            return;
+        }
+
+        // Actualizar el item con la información del estudiante encontrado
+        item.documento = `${documento} - ${nombreEstudiante} (${curso})`;
         item.profesor = profesor;
         item.materia = materia;
 
-        guardarEnGoogleSheet(item);
+        guardarEquipoEnBaseB(item);
         cerrarModal();
         actualizarVista();
     });
@@ -121,7 +238,7 @@ function mostrarModalItem(itemId) {
     btnCancelar.addEventListener('click', cerrarModal);
 
     divBotones.append(btnGuardar, btnCancelar);
-    formulario.append(divDocumento, divProfesor, divMateria, divBotones);
+    formulario.append(divDocumento, divNombreEstudiante, divCurso, divProfesor, divMateria, divBotones);
     listaMetodos.appendChild(formulario);
 
     modal.style.display = 'block';
@@ -146,8 +263,8 @@ function mostrarModalDesmarcar(itemId) {
     const divInfo = document.createElement('div');
     divInfo.className = 'readonly-info';
     divInfo.innerHTML = `
-        <p><strong>Documento:</strong></p>
-        <div class="info-content">${item.documento || 'Sin documento'}</div>
+        <p><strong>Estudiante:</strong></p>
+        <div class="info-content">${item.documento || 'Sin información'}</div>
         <p><strong>Profesor(a) Encargado:</strong></p>
         <div class="info-content">${item.profesor || 'Sin profesor'}</div>
         <p><strong>Materia:</strong></p>
@@ -177,11 +294,14 @@ function mostrarModalDesmarcar(itemId) {
     btnDesmarcar.addEventListener('click', () => {
         const comentario = document.getElementById('comentario').value.trim();
         if (confirm(`¿Deseas desmarcar el equipo ${item.nombre}?`)) {
+            // Eliminar de BaseB
+            eliminarEquipoDeBaseB(item.nombre);
+            
+            // Limpiar localmente
             item.documento = "";
             item.profesor = "";
             item.materia = "";
 
-            // (opcional: guardar comentario)
             console.log(`Desmarcado: ${item.nombre}, Comentario: ${comentario}`);
 
             cerrarModal();
@@ -232,6 +352,9 @@ function crearGrilla() {
 function resetearMalla() {
     if (confirm("¿Estás seguro de resetear todos los equipos?")) {
         items.forEach(item => {
+            if (item.documento) {
+                eliminarEquipoDeBaseB(item.nombre);
+            }
             item.documento = "";
             item.profesor = "";
             item.materia = "";
@@ -256,6 +379,6 @@ document.addEventListener('keydown', function(event) {
 });
 
 document.addEventListener('DOMContentLoaded', function() {
-    cargarDatosDesdeGoogleSheet();               // primera carga
-    setInterval(cargarDatosDesdeGoogleSheet, 30000); // cada 30 segundos
+    cargarEquiposOcupados();                    // Cargar equipos ocupados al inicio
+    setInterval(cargarEquiposOcupados, 30000);  // Actualizar cada 30 segundos
 });
