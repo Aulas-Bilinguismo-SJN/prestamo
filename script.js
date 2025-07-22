@@ -8,7 +8,7 @@ const items = Array.from({length: 50}, (_, i) => ({
     curso: ""
 }));
 
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw73KfcOjeFdSPHKSryzy5mAaNbGs-T4D4tKQ7xA8NqwrcLMEH1l50yqMgR6R5CWZAbaQ/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxPkJVdzy3dmbyfT8jUbaBbETPQc4aDoUGJUVqcsCRYUR8iU48rVCpU2_Va_mz1wtKIJA/exec';
 
 // --- API ---
 const api = {
@@ -48,21 +48,33 @@ const api = {
 
     async buscarEstudiante(documento) {
         try {
-            const data = await fetch(`${SCRIPT_URL}?action=getBaseA&documento=${encodeURIComponent(documento)}`).then(r => r.json());
+            const response = await fetch(`${SCRIPT_URL}?action=getBaseA&documento=${encodeURIComponent(documento)}`);
+            const data = await response.json();
             
-            if (data?.encontrado || data?.length > 0) {
-                const est = data.length > 0 ? data[0] : data;
+            console.log('Respuesta completa de la API:', data); // Para debug
+            
+            // Tu API retorna directamente {encontrado: true/false, documento, nombreCompleto, curso}
+            if (data && data.encontrado === true) {
                 return {
-                    nombreCompleto: est.nombreCompleto || est.nombre || est[1] || '',
-                    documento: est.documento || documento,
-                    curso: est.curso || est[2] || '',
+                    nombreCompleto: data.nombreCompleto || 'Sin nombre',
+                    documento: data.documento || documento,
+                    curso: data.curso || 'Sin curso',
                     encontrado: true
                 };
             }
-            return {encontrado: false};
+            
+            // Si no se encontró o hay error
+            return {
+                encontrado: false,
+                error: data.error || 'Estudiante no encontrado'
+            };
+            
         } catch (error) {
-            console.error('Error búsqueda:', error);
-            return {encontrado: false, error: error.message};
+            console.error('Error en búsqueda:', error);
+            return {
+                encontrado: false, 
+                error: `Error de conexión: ${error.message}`
+            };
         }
     },
 
