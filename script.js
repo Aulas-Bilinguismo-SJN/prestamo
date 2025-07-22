@@ -1,256 +1,130 @@
-const items = [];
-for (let i = 1; i <= 50; i++) {
-    items.push({
-        id: `item_${i}`,
-        nombre: `${i}`,
-        documento: "",
-        profesor: "",
-        materia: ""
-    });
-}
+const items = Array.from({length: 50}, (_, i) => ({
+    id: `item_${i+1}`,
+    nombre: `${i+1}`,
+    documento: "",
+    profesor: "",
+    materia: ""
+}));
 
-// URL del Google Apps Script
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxdigcfuoeHycEROAQ2zfjDAqdrBo0QxjzZNs0AmqqA86PVCsAetPDfp4gP9E3TFGZf7w/exec';
 
-// --- FUNCIONES DE CARGA Y GUARDADO ---
-
-// Cargar equipos ocupados desde BaseB (GET)
-function cargarEquiposOcupados() {
-    fetch(`${SCRIPT_URL}?action=getBaseB`)
-        .then(response => response.json())
-        .then(data => {
-            // Resetear todos los equipos primero
-            items.forEach(item => {
-                item.documento = "";
-                item.profesor = "";
-                item.materia = "";
+// --- API FUNCTIONS ---
+const api = {
+    async cargarEquipos() {
+        try {
+            const data = await fetch(`${SCRIPT_URL}?action=getBaseB`).then(r => r.json());
+            items.forEach(item => Object.assign(item, {documento: "", profesor: "", materia: ""}));
+            data?.forEach(fila => {
+                const item = items.find(i => i.nombre === fila[0]?.toString());
+                if (item && fila.length >= 4) Object.assign(item, {documento: fila[1] || "", profesor: fila[2] || "", materia: fila[3] || ""});
             });
-
-            // Cargar solo los equipos que están en BaseB (ocupados)
-            if (data && Array.isArray(data)) {
-                data.forEach(fila => {
-                    if (fila && fila.length >= 4) {
-                        const numeroEquipo = fila[0]; // Número del equipo
-                        const documento = fila[1];
-                        const profesor = fila[2];
-                        const materia = fila[3];
-                        
-                        // Buscar el equipo correspondiente
-                        const item = items.find(i => i.nombre === numeroEquipo.toString());
-                        if (item) {
-                            item.documento = documento || "";
-                            item.profesor = profesor || "";
-                            item.materia = materia || "";
-                        }
-                    }
-                });
-            }
             actualizarVista();
-        })
-        .catch(error => console.error("Error al cargar equipos ocupados:", error));
+        } catch (error) { console.error("Error al cargar equipos:", error); }
+    },
+
+    async buscarEstudiante(documento) {
+        try {
+            const data = await fetch(`${SCRIPT_URL}?action=getBaseA&documento=${encodeURIComponent(documento)}`).then(r => r.json());
+            return data?.encontrado ? {nombre: data.nombre, curso: data.curso, encontrado: true} : {encontrado: false};
+        } catch { return {encontrado: false}; }
+    },
+
+    guardar(item, action = 'saveToBaseB') {
+        const datos = {action, numeroEquipo: item.nombre, documento: item.documento, profesor: item.profesor, materia: item.materia};
+        fetch(SCRIPT_URL, {method: 'POST', mode: 'no-cors', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(datos)})
+            .catch(error => console.error("Error al guardar:", error));
+    },
+
+    eliminar(numeroEquipo) { this.guardar({nombre: numeroEquipo}, 'deleteFromBaseB'); }
+};
+
+// --- MODAL FUNCTIONS ---
+function crearInput(id, label, type = 'text', placeholder = '', readonly = false, value = '') {
+    return `<div><label for="${id}">${label}:</label>
+            <${type === 'textarea' ? 'textarea' : 'input'} ${type === 'textarea' ? 'rows="3"' : `type="${type}"`} 
+            id="${id}" placeholder="${placeholder}" ${readonly ? 'readonly' : ''} value="${value}">${type === 'textarea' ? value : ''}</${type === 'textarea' ? 'textarea' : 'input'}>
+            ${id === 'documento' ? '<small id="buscarInfo" style="color: #6c757d;">Ingrese el documento para buscar automáticamente</small>' : ''}
+            </div>`;
 }
 
-// Buscar estudiante en BaseA por documento
-function buscarEstudianteEnBaseA(documento) {
-    return fetch(`${SCRIPT_URL}?action=getBaseA&documento=${encodeURIComponent(documento)}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data && data.encontrado) {
-                return {
-                    nombre: data.nombre,
-                    curso: data.curso,
-                    encontrado: true
-                };
-            }
-            return { encontrado: false };
-        })
-        .catch(error => {
-            console.error("Error al buscar estudiante:", error);
-            return { encontrado: false };
-        });
+function crearBotones(guardarText, guardarClass, onGuardar) {
+    const div = document.createElement('div');
+    div.style.cssText = 'display: flex; gap: 10px; justify-content: flex-end;';
+    div.innerHTML = `<button id="btnGuardar" class="${guardarClass}" style="background-color: ${guardarClass === 'delete-modal-btn' ? '#dc3545' : '#007bff'}; color: white;">${guardarText}</button>
+                     <button id="btnCancelar" style="background-color: #6c757d; color: white;">Cancelar</button>`;
+    div.querySelector('#btnGuardar').onclick = onGuardar;
+    div.querySelector('#btnCancelar').onclick = cerrarModal;
+    return div;
 }
-
-// Guardar equipo ocupado en BaseB (POST)
-function guardarEquipoEnBaseB(item) {
-    const datos = {
-        action: 'saveToBaseB',
-        numeroEquipo: item.nombre,
-        documento: item.documento,
-        profesor: item.profesor,
-        materia: item.materia
-    };
-
-    fetch(SCRIPT_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(datos)
-    }).catch(error => console.error("Error al guardar en BaseB:", error));
-}
-
-// Eliminar equipo de BaseB
-function eliminarEquipoDeBaseB(numeroEquipo) {
-    const datos = {
-        action: 'deleteFromBaseB',
-        numeroEquipo: numeroEquipo
-    };
-
-    fetch(SCRIPT_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(datos)
-    }).catch(error => console.error("Error al eliminar de BaseB:", error));
-}
-
-// --- MODAL: MARCAR Y DESMARCAR ---
 
 function mostrarModalItem(itemId) {
     const item = items.find(i => i.id === itemId);
     if (!item) return;
 
-    if (item.documento.trim() !== "") {
-        mostrarModalDesmarcar(itemId);
-        return;
-    }
+    if (item.documento.trim()) return mostrarModalDesmarcar(itemId);
 
     const modal = document.getElementById('modalMetodos');
-    const listaMetodos = document.getElementById('listaMetodos');
+    const container = document.getElementById('listaMetodos');
+    
     document.querySelector('.modal-header h2').textContent = `Equipo ${item.nombre}`;
     document.querySelector('.modal-body p').textContent = 'Complete la información del Equipo:';
-    listaMetodos.innerHTML = '';
+    
+    const form = document.createElement('div');
+    form.style.cssText = 'display: flex; flex-direction: column; gap: 15px;';
+    form.innerHTML = [
+        crearInput('documento', 'Documento del Estudiante', 'text', 'Ingrese el número de documento...'),
+        crearInput('nombreEstudiante', 'Nombre del Estudiante', 'text', 'Se completará automáticamente o ingrese manualmente...'),
+        crearInput('curso', 'Curso', 'text', 'Se completará automáticamente o ingrese manualmente...'),
+        crearInput('profesor', 'Profesor(a) Encargado', 'text', 'Ingrese el nombre del profesor(a)...', false, item.profesor),
+        crearInput('materia', 'Materia', 'text', 'Ingrese la materia...', false, item.materia)
+    ].join('');
 
-    const formulario = document.createElement('div');
-    formulario.style.display = 'flex';
-    formulario.style.flexDirection = 'column';
-    formulario.style.gap = '15px';
-
-    const divDocumento = document.createElement('div');
-    divDocumento.innerHTML = `
-        <label for="documento">Documento del Estudiante:</label>
-        <input type="text" id="documento" value="${item.documento}" placeholder="Ingrese el número de documento...">
-        <small id="buscarInfo" style="color: #6c757d;">Ingrese el documento para buscar automáticamente el estudiante</small>
-    `;
-
-    const divNombreEstudiante = document.createElement('div');
-    divNombreEstudiante.innerHTML = `
-        <label for="nombreEstudiante">Nombre del Estudiante:</label>
-        <input type="text" id="nombreEstudiante" placeholder="Se completará automáticamente o ingrese manualmente...">
-    `;
-
-    const divCurso = document.createElement('div');
-    divCurso.innerHTML = `
-        <label for="curso">Curso:</label>
-        <input type="text" id="curso" placeholder="Se completará automáticamente o ingrese manualmente...">
-    `;
-
-    const divProfesor = document.createElement('div');
-    divProfesor.innerHTML = `
-        <label for="profesor">Profesor(a) Encargado:</label>
-        <input type="text" id="profesor" value="${item.profesor}" placeholder="Ingrese el nombre del profesor(a)...">
-    `;
-
-    const divMateria = document.createElement('div');
-    divMateria.innerHTML = `
-        <label for="materia">Materia:</label>
-        <input type="text" id="materia" value="${item.materia}" placeholder="Ingrese la materia...">
-    `;
-
-    const divBotones = document.createElement('div');
-    divBotones.style.display = 'flex';
-    divBotones.style.gap = '10px';
-    divBotones.style.justifyContent = 'flex-end';
-
-    const btnGuardar = document.createElement('button');
-    btnGuardar.textContent = 'Guardar';
-    btnGuardar.style.backgroundColor = '#007bff';
-    btnGuardar.style.color = 'white';
-    btnGuardar.disabled = false; // Habilitado por defecto
-
-    const btnCancelar = document.createElement('button');
-    btnCancelar.textContent = 'Cancelar';
-    btnCancelar.style.backgroundColor = '#6c757d';
-    btnCancelar.style.color = 'white';
-
-    // Event listener para buscar automáticamente cuando se ingrese el documento
-    let timerBusqueda;
-    document.getElementById('documento').addEventListener('input', function(e) {
-        const documento = e.target.value.trim();
-        const infoElement = document.getElementById('buscarInfo');
-        const nombreInput = document.getElementById('nombreEstudiante');
-        const cursoInput = document.getElementById('curso');
+    // Búsqueda automática
+    let timer;
+    form.querySelector('#documento').oninput = (e) => {
+        const doc = e.target.value.trim();
+        const info = document.getElementById('buscarInfo');
+        const [nombre, curso] = [document.getElementById('nombreEstudiante'), document.getElementById('curso')];
         
-        // Limpiar timer anterior
-        clearTimeout(timerBusqueda);
+        clearTimeout(timer);
+        if (doc.length >= 3) {
+            info.textContent = 'Buscando estudiante...';
+            info.style.color = '#ffc107';
+            timer = setTimeout(async () => {
+                const result = await api.buscarEstudiante(doc);
+                if (result.encontrado) {
+                    nombre.value = result.nombre;
+                    curso.value = result.curso;
+                    info.textContent = '✓ Estudiante encontrado';
+                    info.style.color = '#28a745';
+                } else {
+                    nombre.value = curso.value = '';
+                    info.textContent = '⚠ Estudiante no encontrado - puede continuar manualmente';
+                    info.style.color = '#dc3545';
+                }
+            }, 500);
+        } else if (!doc.length) {
+            nombre.value = curso.value = '';
+            info.textContent = 'Ingrese el documento para buscar automáticamente';
+            info.style.color = '#6c757d';
+        }
+    };
+
+    form.appendChild(crearBotones('Guardar', '', () => {
+        const [doc, nom, cur, prof, mat] = ['documento', 'nombreEstudiante', 'curso', 'profesor', 'materia'].map(id => document.getElementById(id).value.trim());
+        if (!doc || !prof || !mat) return alert('Complete al menos: Documento, Profesor y Materia');
         
-        if (documento.length >= 3) { // Buscar cuando tenga al menos 3 dígitos
-            infoElement.textContent = 'Buscando estudiante...';
-            infoElement.style.color = '#ffc107';
-            
-            timerBusqueda = setTimeout(() => {
-                buscarEstudianteEnBaseA(documento).then(resultado => {
-                    if (resultado.encontrado) {
-                        nombreInput.value = resultado.nombre;
-                        cursoInput.value = resultado.curso;
-                        infoElement.textContent = '✓ Estudiante encontrado';
-                        infoElement.style.color = '#28a745';
-                    } else {
-                        nombreInput.value = '';
-                        cursoInput.value = '';
-                        infoElement.textContent = '⚠ Estudiante no encontrado - puede continuar manualmente';
-                        infoElement.style.color = '#dc3545';
-                    }
-                }).catch(error => {
-                    console.error('Error en búsqueda:', error);
-                    infoElement.textContent = '⚠ Error en búsqueda - puede continuar manualmente';
-                    infoElement.style.color = '#dc3545';
-                });
-            }, 500); // Esperar 500ms después de que el usuario deje de escribir
-        } else if (documento.length === 0) {
-            nombreInput.value = '';
-            cursoInput.value = '';
-            infoElement.textContent = 'Ingrese el documento para buscar automáticamente el estudiante';
-            infoElement.style.color = '#6c757d';
-        }
-    });
-
-    btnGuardar.addEventListener('click', () => {
-        const documento = document.getElementById('documento').value.trim();
-        const nombreEstudiante = document.getElementById('nombreEstudiante').value.trim();
-        const curso = document.getElementById('curso').value.trim();
-        const profesor = document.getElementById('profesor').value.trim();
-        const materia = document.getElementById('materia').value.trim();
-
-        if (!documento || !profesor || !materia) {
-            alert('Por favor complete al menos: Documento, Profesor y Materia');
-            return;
-        }
-
-        // Construir la información del estudiante
-        let infoEstudiante = documento;
-        if (nombreEstudiante) {
-            infoEstudiante += ` - ${nombreEstudiante}`;
-        }
-        if (curso) {
-            infoEstudiante += ` (${curso})`;
-        }
-
-        // Actualizar el item
-        item.documento = infoEstudiante;
-        item.profesor = profesor;
-        item.materia = materia;
-
-        guardarEquipoEnBaseB(item);
+        item.documento = doc + (nom ? ` - ${nom}` : '') + (cur ? ` (${cur})` : '');
+        item.profesor = prof;
+        item.materia = mat;
+        
+        api.guardar(item);
         cerrarModal();
         actualizarVista();
-    });
+    }));
 
-    btnCancelar.addEventListener('click', cerrarModal);
-
-    divBotones.append(btnGuardar, btnCancelar);
-    formulario.append(divDocumento, divNombreEstudiante, divCurso, divProfesor, divMateria, divBotones);
-    listaMetodos.appendChild(formulario);
-
+    container.innerHTML = '';
+    container.appendChild(form);
     modal.style.display = 'block';
 }
 
@@ -259,136 +133,67 @@ function mostrarModalDesmarcar(itemId) {
     if (!item) return;
 
     const modal = document.getElementById('modalMetodos');
-    const listaMetodos = document.getElementById('listaMetodos');
-
+    const container = document.getElementById('listaMetodos');
+    
     document.querySelector('.modal-header h2').textContent = `Desmarcar Equipo ${item.nombre}`;
     document.querySelector('.modal-body p').textContent = 'Información del Equipo a desmarcar:';
-    listaMetodos.innerHTML = '';
 
-    const formulario = document.createElement('div');
-    formulario.style.display = 'flex';
-    formulario.style.flexDirection = 'column';
-    formulario.style.gap = '15px';
+    const form = document.createElement('div');
+    form.style.cssText = 'display: flex; flex-direction: column; gap: 15px;';
+    form.innerHTML = `<div class="readonly-info">
+        <p><strong>Estudiante:</strong></p><div class="info-content">${item.documento || 'Sin información'}</div>
+        <p><strong>Profesor(a):</strong></p><div class="info-content">${item.profesor || 'Sin profesor'}</div>
+        <p><strong>Materia:</strong></p><div class="info-content">${item.materia || 'Sin materia'}</div>
+    </div>
+    <div><label for="comentario">Comentario (opcional):</label>
+    <textarea id="comentario" rows="4" placeholder="Explique por qué se desmarca..."></textarea></div>`;
 
-    const divInfo = document.createElement('div');
-    divInfo.className = 'readonly-info';
-    divInfo.innerHTML = `
-        <p><strong>Estudiante:</strong></p>
-        <div class="info-content">${item.documento || 'Sin información'}</div>
-        <p><strong>Profesor(a) Encargado:</strong></p>
-        <div class="info-content">${item.profesor || 'Sin profesor'}</div>
-        <p><strong>Materia:</strong></p>
-        <div class="info-content">${item.materia || 'Sin materia'}</div>
-    `;
-
-    const divComentario = document.createElement('div');
-    divComentario.innerHTML = `
-        <label for="comentario">Comentario (opcional):</label>
-        <textarea id="comentario" rows="4" placeholder="Explique por qué se desmarca..."></textarea>
-    `;
-
-    const divBotones = document.createElement('div');
-    divBotones.style.display = 'flex';
-    divBotones.style.gap = '10px';
-    divBotones.style.justifyContent = 'flex-end';
-
-    const btnDesmarcar = document.createElement('button');
-    btnDesmarcar.textContent = 'Desmarcar';
-    btnDesmarcar.className = 'delete-modal-btn';
-
-    const btnCancelar = document.createElement('button');
-    btnCancelar.textContent = 'Cancelar';
-    btnCancelar.style.backgroundColor = '#6c757d';
-    btnCancelar.style.color = 'white';
-
-    btnDesmarcar.addEventListener('click', () => {
+    form.appendChild(crearBotones('Desmarcar', 'delete-modal-btn', () => {
         const comentario = document.getElementById('comentario').value.trim();
         if (confirm(`¿Deseas desmarcar el equipo ${item.nombre}?`)) {
-            // Eliminar de BaseB
-            eliminarEquipoDeBaseB(item.nombre);
-            
-            // Limpiar localmente
-            item.documento = "";
-            item.profesor = "";
-            item.materia = "";
-
+            api.eliminar(item.nombre);
+            Object.assign(item, {documento: "", profesor: "", materia: ""});
             console.log(`Desmarcado: ${item.nombre}, Comentario: ${comentario}`);
-
             cerrarModal();
             actualizarVista();
         }
-    });
+    }));
 
-    btnCancelar.addEventListener('click', cerrarModal);
-    divBotones.append(btnDesmarcar, btnCancelar);
-    formulario.append(divInfo, divComentario, divBotones);
-    listaMetodos.appendChild(formulario);
-
+    container.innerHTML = '';
+    container.appendChild(form);
     modal.style.display = 'block';
 }
 
-// --- ACTUALIZACIÓN Y RENDER DE GRILLA ---
-
-function actualizarVista() {
-    crearGrilla();
-}
+// --- UI FUNCTIONS ---
+const actualizarVista = () => crearGrilla();
 
 function crearGrilla() {
     const contenedor = document.getElementById("malla");
-    contenedor.innerHTML = "";
-
-    items.forEach(item => {
-        const div = document.createElement("div");
-        div.className = "ramo";
-        div.style.backgroundColor = item.documento ? "#d4edda" : "#f8f9fa";
-        div.style.borderColor = item.documento ? "#28a745" : "#ccc";
-
-        const numero = document.createElement("div");
-        numero.textContent = item.nombre;
-        numero.style.fontWeight = "bold";
-
-        const estado = document.createElement("div");
-        estado.textContent = item.documento ? "✓" : "○";
-        estado.style.color = item.documento ? "green" : "#6c757d";
-
-        div.append(numero, estado);
-        div.addEventListener("click", () => mostrarModalItem(item.id));
-        contenedor.appendChild(div);
-    });
+    contenedor.innerHTML = items.map(item => {
+        const ocupado = !!item.documento;
+        return `<div class="ramo" style="background-color: ${ocupado ? '#d4edda' : '#f8f9fa'}; border-color: ${ocupado ? '#28a745' : '#ccc'};" onclick="mostrarModalItem('${item.id}')">
+                    <div style="font-weight: bold;">${item.nombre}</div>
+                    <div style="color: ${ocupado ? 'green' : '#6c757d'};">${ocupado ? '✓' : '○'}</div>
+                </div>`;
+    }).join('');
 }
-
-// --- UTILIDADES ---
 
 function resetearMalla() {
     if (confirm("¿Estás seguro de resetear todos los equipos?")) {
         items.forEach(item => {
-            if (item.documento) {
-                eliminarEquipoDeBaseB(item.nombre);
-            }
-            item.documento = "";
-            item.profesor = "";
-            item.materia = "";
+            if (item.documento) api.eliminar(item.nombre);
+            Object.assign(item, {documento: "", profesor: "", materia: ""});
         });
         actualizarVista();
     }
 }
 
-function cerrarModal() {
-    document.getElementById('modalMetodos').style.display = 'none';
-}
+const cerrarModal = () => document.getElementById('modalMetodos').style.display = 'none';
 
-// --- INICIALIZACIÓN ---
-
-window.onclick = function(event) {
-    const modal = document.getElementById('modalMetodos');
-    if (event.target === modal) cerrarModal();
-};
-
-document.addEventListener('keydown', function(event) {
-    if (event.key === 'Escape') cerrarModal();
-});
-
-document.addEventListener('DOMContentLoaded', function() {
-    cargarEquiposOcupados();                    // Cargar equipos ocupados al inicio
-    setInterval(cargarEquiposOcupados, 30000);  // Actualizar cada 30 segundos
+// --- EVENT LISTENERS ---
+window.onclick = e => e.target === document.getElementById('modalMetodos') && cerrarModal();
+document.addEventListener('keydown', e => e.key === 'Escape' && cerrarModal());
+document.addEventListener('DOMContentLoaded', () => {
+    api.cargarEquipos();
+    setInterval(api.cargarEquipos, 30000);
 });
