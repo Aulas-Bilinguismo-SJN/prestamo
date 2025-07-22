@@ -45,7 +45,8 @@ const api = {
                                 curso: fila[4] || "",           // Curso
                                 profesor: fila[5] || "",        // Profesor Encargado
                                 materia: fila[6] || "",         // Materia
-                                tipo: tipo                      // Tipo
+                                tipo: tipo,                     // Tipo
+                                comentario: fila[8] || ""       // Comentario
                             };
                         }
                     }
@@ -121,7 +122,7 @@ const api = {
     async guardarPrestamo(item, datosEstudiante) {
         const datos = {
             action: 'saveToBaseB',
-            // Estructura: Marca temporal, Equipo, Nombre Completo, Documento, Curso, Profesor Encargado, Materia, Tipo
+            // Estructura: Marca temporal, Equipo, Nombre Completo, Documento, Curso, Profesor Encargado, Materia, Tipo, Comentario
             marcaTemporal: new Date().toISOString(),
             equipo: item.nombre,
             nombreCompleto: datosEstudiante.nombreCompleto || '',
@@ -129,7 +130,8 @@ const api = {
             curso: datosEstudiante.curso || '',
             profesorEncargado: item.profesor,
             materia: item.materia,
-            tipo: 'Préstamo'
+            tipo: 'Préstamo',
+            comentario: '' // Vacío para préstamos, se usa principalmente en devoluciones
         };
         
         try {
@@ -145,10 +147,10 @@ const api = {
         }
     },
 
-    async guardarDevolucion(item) {
+    async guardarDevolucion(item, comentario = '') {
         const datos = {
             action: 'saveToBaseB',
-            // Estructura: Marca temporal, Equipo, Nombre Completo, Documento, Curso, Profesor Encargado, Materia, Tipo
+            // Estructura: Marca temporal, Equipo, Nombre Completo, Documento, Curso, Profesor Encargado, Materia, Tipo, Comentario
             marcaTemporal: new Date().toISOString(),
             equipo: item.nombre,
             nombreCompleto: item.nombreCompleto || '',
@@ -156,7 +158,8 @@ const api = {
             curso: item.curso || '',
             profesorEncargado: item.profesor,
             materia: item.materia,
-            tipo: 'Devuelto'
+            tipo: 'Devuelto',
+            comentario: comentario
         };
         
         try {
@@ -327,8 +330,8 @@ function mostrarModalDesmarcar(itemId) {
         const comentario = document.getElementById('comentario').value.trim();
         if (confirm(`¿Confirma la devolución del equipo ${item.nombre}?`)) {
             
-            // Registrar devolución en BaseB
-            await api.guardarDevolucion(item);
+            // Registrar devolución en BaseB con comentario
+            await api.guardarDevolucion(item, comentario);
             
             // Limpiar item local
             Object.assign(item, {
@@ -370,9 +373,11 @@ function crearGrilla() {
 
 function resetearMalla() {
     if (confirm("⚠️ ATENCIÓN: Esto registrará la devolución de TODOS los equipos prestados. ¿Estás seguro?")) {
+        const comentarioMasivo = prompt("Comentario para devolución masiva (opcional):", "Devolución masiva - Fin de jornada");
+        
         items.forEach(async item => {
             if (item.documento) {
-                await api.guardarDevolucion(item);
+                await api.guardarDevolucion(item, comentarioMasivo || '');
                 Object.assign(item, {
                     documento: "", 
                     profesor: "", 
