@@ -82,7 +82,7 @@ function crearInput(id, label, type = 'text', placeholder = '', readonly = false
     return `<div><label for="${id}">${label}:</label>
             <${type === 'textarea' ? 'textarea' : 'input'} ${type === 'textarea' ? 'rows="3"' : `type="${type}"`} 
             id="${id}" placeholder="${placeholder}" ${readonly ? 'readonly' : ''} value="${value}">${type === 'textarea' ? value : ''}</${type === 'textarea' ? 'textarea' : 'input'}>
-            ${id === 'documento' ? '<small id="buscarInfo" style="color: #6c757d;">Ingrese el documento para buscar automáticamente</small>' : ''}
+            ${id === 'documento' ? '<small id="buscarInfo" style="color: #6c757d;">Ingrese el Documento para buscar automáticamente</small>' : ''}
             </div>`;
 }
 
@@ -140,19 +140,19 @@ function mostrarModalItem(itemId) {
                         if (result.error) {
                             info.textContent = `⚠ Error: ${result.error}`;
                         } else {
-                            info.textContent = '⚠ Documento no encontrado - puede continuar';
+                            info.textContent = '⚠ Documento no encontrado - Registre manualmente';
                         }
                         info.style.color = '#dc3545';
                     }
                 } catch (error) {
                     console.error('Error en validación:', error);
-                    info.textContent = '⚠ Error en validación - puede continuar';
+                    info.textContent = '⚠ Error en validación - Puede continuar';
                     info.style.color = '#dc3545';
                 }
             }, 800);
             
         } else if (!doc.length) {
-            info.textContent = 'Ingrese el documento para buscar automáticamente';
+            info.textContent = 'Ingrese el Documento para buscar automáticamente';
             info.style.color = '#6c757d';
         }
     };
