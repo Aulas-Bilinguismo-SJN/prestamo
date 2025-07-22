@@ -62,7 +62,7 @@ function mostrarModalItem(itemId) {
 
     const modal = document.getElementById('modalMetodos');
     const listaMetodos = document.getElementById('listaMetodos');
-    document.querySelector('.modal-header h2').textContent = `Item ${item.nombre}`;
+    document.querySelector('.modal-header h2').textContent = `Equipo ${item.nombre}`;
     document.querySelector('.modal-body p').textContent = 'Complete la información del Equipo:';
     listaMetodos.innerHTML = '';
 
