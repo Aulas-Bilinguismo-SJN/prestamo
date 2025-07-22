@@ -8,7 +8,7 @@ const items = Array.from({length: 50}, (_, i) => ({
     curso: ""
 }));
 
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxdigcfuoeHycEROAQ2zfjDAqdrBo0QxjzZNs0AmqqA86PVCsAetPDfp4gP9E3TFGZf7w/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw73KfcOjeFdSPHKSryzy5mAaNbGs-T4D4tKQ7xA8NqwrcLMEH1l50yqMgR6R5CWZAbaQ/exec';
 
 // --- API ---
 const api = {
