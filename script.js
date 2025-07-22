@@ -1,4 +1,3 @@
-
 const items = Array.from({length: 50}, (_, i) => ({
     id: `item_${i+1}`,
     nombre: `${i+1}`,
@@ -114,56 +113,106 @@ const crearInput = (id, label, type = 'text', placeholder = '', readonly = false
      ${id === 'documento' ? '<small id="buscarInfo" style="color: #6c757d;">Ingrese el Documento para buscar automáticamente</small>' : ''}
      </div>`;
 
+// Función para crear el modal si no existe
+function crearModal() {
+    if (document.getElementById('modalMetodos')) return;
+    
+    const modalHTML = `
+        <div id="modalMetodos" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);">
+            <div style="position: relative; background-color: white; margin: 5% auto; padding: 0; width: 90%; max-width: 600px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+                <div class="modal-header" style="background-color: #f8f9fa; padding: 20px; border-bottom: 1px solid #dee2e6; border-radius: 8px 8px 0 0;">
+                    <h2 style="margin: 0; color: #333;">Gestión de Equipo</h2>
+                    <span onclick="cerrarModal()" style="position: absolute; right: 20px; top: 20px; font-size: 28px; font-weight: bold; color: #999; cursor: pointer; user-select: none;">&times;</span>
+                </div>
+                <div class="modal-body" style="padding: 20px;">
+                    <p style="margin-bottom: 20px; color: #666;">Información del equipo:</p>
+                    <div id="listaMetodos"></div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    console.log('Modal creado exitosamente');
+}
+
 function mostrarModalItem(itemId) {
     const item = items.find(i => i.id === itemId);
     if (!item) return;
 
-    const modal = document.getElementById('modalMetodos');
-    const container = document.getElementById('listaMetodos');
-    const esDevolucion = !!item.documento.trim();
+    let modal = document.getElementById('modalMetodos');
     
-    document.querySelector('.modal-header h2').textContent = `${esDevolucion ? 'Devolver' : ''} Equipo ${item.nombre}`;
-    document.querySelector('.modal-body p').textContent = esDevolucion ? 
-        'Información del Préstamo Activo:' : 'Complete la información del Préstamo:';
+    // Si el modal no existe, crearlo
+    if (!modal) {
+        console.log('Modal no encontrado, creándolo...');
+        crearModal();
+        modal = document.getElementById('modalMetodos');
+    }
+
+    const container = document.getElementById('listaMetodos');
+    if (!modal || !container) {
+        console.error('Modal o container no encontrado después de crear');
+        return;
+    }
+
+    const esDevolucion = !!item.documento.trim();
+
+    // Actualizar título y descripción del modal
+    const header = modal.querySelector('.modal-header h2');
+    const bodyP = modal.querySelector('.modal-body p');
+    if (header) header.textContent = `${esDevolucion ? 'Devolver' : 'Prestar'} Equipo ${item.nombre}`;
+    if (bodyP) bodyP.textContent = esDevolucion ? 'Información del Préstamo Activo:' : 'Complete la información del Préstamo:';
 
     if (esDevolucion) {
-        // Modal Devolución
+        // Modal para devolución con el diseño mejorado de S_A
         container.innerHTML = `
             <div style="display: flex; flex-direction: column; gap: 15px;">
-                <div class="readonly-info">
-                    <p><strong>Estudiante:</strong></p><div class="info-content">${item.nombreCompleto || 'Sin información'}</div>
-                    <p><strong>Documento:</strong></p><div class="info-content">${item.documento}</div>
-                    <p><strong>Curso:</strong></p><div class="info-content">${item.curso || 'Sin información'}</div>
-                    <p><strong>Profesor(a):</strong></p><div class="info-content">${item.profesor || 'Sin profesor'}</div>
-                    <p><strong>Materia:</strong></p><div class="info-content">${item.materia || 'Sin materia'}</div>
+                <div class="readonly-info" style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; border-left: 4px solid #28a745;">
+                    <div style="margin-bottom: 10px;"><strong>Estudiante:</strong> ${item.nombreCompleto || 'Sin información'}</div>
+                    <div style="margin-bottom: 10px;"><strong>Documento:</strong> ${item.documento}</div>
+                    <div style="margin-bottom: 10px;"><strong>Curso:</strong> ${item.curso || 'Sin información'}</div>
+                    <div style="margin-bottom: 10px;"><strong>Profesor(a):</strong> ${item.profesor || 'Sin profesor'}</div>
+                    <div><strong>Materia:</strong> ${item.materia || 'Sin materia'}</div>
                 </div>
-                <div><label for="comentario">Comentario de Devolución (opcional):</label>
-                <textarea id="comentario" rows="4" placeholder="Observaciones sobre el estado del equipo..."></textarea></div>
+                <div>
+                    <label for="comentario" style="display: block; margin-bottom: 5px; font-weight: bold;">Comentario de Devolución (opcional):</label>
+                    <textarea id="comentario" rows="4" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; resize: vertical;" placeholder="Observaciones sobre el estado del equipo..."></textarea>
+                </div>
                 <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                    <button id="btnGuardar" style="background-color: #dc3545; color: white;">Registrar Devolución</button>
-                    <button id="btnCancelar" style="background-color: #6c757d; color: white;">Cancelar</button>
+                    <button id="btnGuardar" style="background-color: #dc3545; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold;">Registrar Devolución</button>
+                    <button id="btnCancelar" style="background-color: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">Cancelar</button>
                 </div>
             </div>`;
-            
+
         document.getElementById('btnGuardar').onclick = async () => {
             const comentario = document.getElementById('comentario').value.trim();
             if (confirm(`¿Confirma la devolución del equipo ${item.nombre}?`)) {
                 await api.guardar(item, 'Devuelto', null, comentario);
                 Object.assign(item, {documento: "", profesor: "", materia: "", nombreCompleto: "", curso: ""});
-                cerrarModal();
+                cerrarModal(); 
                 actualizarVista();
             }
         };
     } else {
-        // Modal Préstamo
+        // Modal para préstamo con el diseño mejorado de S_A
         container.innerHTML = `
             <div style="display: flex; flex-direction: column; gap: 15px;">
-                ${crearInput('documento', 'Documento del Estudiante', 'text', 'Ingrese el número de documento...')}
-                ${crearInput('profesor', 'Profesor(a) Encargado', 'text', 'Ingrese el nombre del profesor(a)...', false, item.profesor)}
-                ${crearInput('materia', 'Materia', 'text', 'Ingrese la materia...', false, item.materia)}
+                <div>
+                    <label for="documento" style="display: block; margin-bottom: 5px; font-weight: bold;">Documento del Estudiante:</label>
+                    <input type="text" id="documento" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Ingrese el número de documento...">
+                    <small id="buscarInfo" style="color: #6c757d; display: block; margin-top: 5px;">Ingrese el Documento para buscar automáticamente</small>
+                </div>
+                <div>
+                    <label for="profesor" style="display: block; margin-bottom: 5px; font-weight: bold;">Profesor(a) Encargado:</label>
+                    <input type="text" id="profesor" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Ingrese el nombre del profesor(a)..." value="${item.profesor}">
+                </div>
+                <div>
+                    <label for="materia" style="display: block; margin-bottom: 5px; font-weight: bold;">Materia:</label>
+                    <input type="text" id="materia" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Ingrese la materia..." value="${item.materia}">
+                </div>
                 <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                    <button id="btnGuardar" style="background-color: #007bff; color: white;">Registrar Préstamo</button>
-                    <button id="btnCancelar" style="background-color: #6c757d; color: white;">Cancelar</button>
+                    <button id="btnGuardar" style="background-color: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold;">Registrar Préstamo</button>
+                    <button id="btnCancelar" style="background-color: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">Cancelar</button>
                 </div>
             </div>`;
 
@@ -202,12 +251,12 @@ function mostrarModalItem(itemId) {
             const [doc, prof, mat] = ['documento', 'profesor', 'materia'].map(id => document.getElementById(id).value.trim());
             
             if (!doc || !prof || !mat) {
-                return alert('Complete todos los campos: Documento, Profesor y Materia');
+                alert('Complete todos los campos: Documento, Profesor y Materia');
+                return;
             }
             
             if (!datosEstudiante.encontrado && Object.keys(datosEstudiante).length === 0) {
-                const confirmacion = confirm('No se encontró información del estudiante. ¿Desea continuar con el registro manual?');
-                if (!confirmacion) return;
+                if (!confirm('No se encontró información del estudiante. ¿Desea continuar con el registro manual?')) return;
                 datosEstudiante = {documento: doc, nombreCompleto: 'Registro Manual', curso: 'Por verificar'};
             }
             
@@ -218,24 +267,36 @@ function mostrarModalItem(itemId) {
             });
             
             await api.guardar(item, 'Préstamo', datosEstudiante);
-            cerrarModal();
+            cerrarModal(); 
             actualizarVista();
         };
     }
 
-    document.getElementById('btnCancelar').onclick = cerrarModal;
+    // Asignar evento al botón cancelar
+    const btnCancelar = document.getElementById('btnCancelar');
+    if (btnCancelar) {
+        btnCancelar.onclick = cerrarModal;
+    }
+    
+    // Mostrar el modal
     modal.style.display = 'block';
+    console.log('Modal mostrado para item:', item.nombre, 'Tipo:', esDevolucion ? 'Devolución' : 'Préstamo');
 }
 
 // --- UI ---
 const actualizarVista = () => {
-    document.getElementById("malla").innerHTML = items.map(item => {
+    const contenedor = document.getElementById("malla");
+    if (!contenedor) return console.error('Error: No se encontró el elemento con id "malla"');
+
+    contenedor.innerHTML = items.map(item => {
         const ocupado = !!item.documento;
-        return `<div class="ramo" style="background-color: ${ocupado ? '#d4edda' : '#f8f9fa'}; border-color: ${ocupado ? '#28a745' : '#ccc'};" onclick="mostrarModalItem('${item.id}')">
-                    <div style="font-weight: bold;">${item.nombre}</div>
-                    <div style="color: ${ocupado ? 'green' : '#6c757d'};">${ocupado ? '✓' : '○'}</div>
-                    ${ocupado ? `<div style="font-size: 0.8em; color: #666; margin-top: 5px;">${item.nombreCompleto}</div>` : ''}
-                </div>`;
+        return `
+            <div class="ramo" style="background-color: ${ocupado ? '#d4edda' : '#f8f9fa'}; border: 2px solid ${ocupado ? '#28a745' : '#ccc'}; border-radius: 8px; padding: 15px; margin: 5px; cursor: pointer; text-align: center; min-height: 80px; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: all 0.3s ease;" 
+                 onclick="mostrarModalItem('${item.id}')" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+                <div style="font-weight: bold; font-size: 1.2em;">${item.nombre}</div>
+                <div style="color: ${ocupado ? 'green' : '#6c757d'}; font-size: 1.5em; margin: 5px 0;">${ocupado ? '✓' : '○'}</div>
+                ${ocupado ? `<div style="font-size: 0.8em; color: #666; margin-top: 5px; text-align: center;"><strong>${item.nombreCompleto || 'Sin nombre'}</strong><br><small>${item.curso || 'Sin curso'}</small></div>` : ''}
+            </div>`;
     }).join('');
 };
 
@@ -252,12 +313,53 @@ function resetearMalla() {
     }
 }
 
-const cerrarModal = () => document.getElementById('modalMetodos').style.display = 'none';
+const cerrarModal = () => {
+    const modal = document.getElementById('modalMetodos');
+    if (modal) {
+        modal.style.display = 'none';
+        console.log('Modal cerrado');
+    }
+};
 
-// --- EVENTOS ---
-window.onclick = e => e.target === document.getElementById('modalMetodos') && cerrarModal();
-document.addEventListener('keydown', e => e.key === 'Escape' && cerrarModal());
-document.addEventListener('DOMContentLoaded', () => {
-    api.cargarEquipos();
-    setInterval(api.cargarEquipos, 30000);
+// Event listeners
+window.onclick = e => { 
+    if (e.target === document.getElementById('modalMetodos')) {
+        cerrarModal(); 
+    }
+};
+
+document.addEventListener('keydown', e => { 
+    if (e.key === 'Escape') {
+        cerrarModal(); 
+    }
 });
+
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM cargado, inicializando...');
+    
+    // Verificar elementos requeridos
+    const malla = document.getElementById('malla');
+    if (!malla) {
+        console.error('Elemento "malla" no encontrado');
+        return;
+    }
+    
+    // Crear el modal si no existe
+    crearModal();
+    
+    // Inicializar vista
+    actualizarVista();
+    api.cargarEquipos();
+    
+    // Configurar actualización automática cada 30 segundos
+    setInterval(api.cargarEquipos, 30000);
+    
+    console.log('Aplicación inicializada correctamente');
+});
+
+// Función de debug
+window.debugItems = () => {
+    console.log('Items:', items);
+    console.log('Malla:', document.getElementById('malla'));
+    console.log('Modal:', document.getElementById('modalMetodos'));
+};
