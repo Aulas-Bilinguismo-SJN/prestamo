@@ -3,7 +3,9 @@ const items = Array.from({length: 50}, (_, i) => ({
     nombre: `${i+1}`,
     documento: "",
     profesor: "",
-    materia: ""
+    materia: "",
+    nombreCompleto: "",
+    curso: ""
 }));
 
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxdigcfuoeHycEROAQ2zfjDAqdrBo0QxjzZNs0AmqqA86PVCsAetPDfp4gP9E3TFGZf7w/exec';
@@ -13,11 +15,59 @@ const api = {
     async cargarEquipos() {
         try {
             const data = await fetch(`${SCRIPT_URL}?action=getBaseB`).then(r => r.json());
-            items.forEach(item => Object.assign(item, {documento: "", profesor: "", materia: ""}));
+            
+            // Resetear todos los items
+            items.forEach(item => Object.assign(item, {
+                documento: "", 
+                profesor: "", 
+                materia: "",
+                nombreCompleto: "",
+                curso: ""
+            }));
+            
+            // Procesar registros para encontrar el último estado de cada equipo
+            const estadosEquipos = {};
+            
             data?.forEach(fila => {
-                const item = items.find(i => i.nombre === fila[0]?.toString());
-                if (item && fila.length >= 4) Object.assign(item, {documento: fila[1] || "", profesor: fila[2] || "", materia: fila[3] || ""});
+                if (fila.length >= 8) {
+                    const numeroEquipo = fila[1]?.toString(); // Equipo
+                    const tipo = fila[7]?.toString(); // Tipo
+                    const timestamp = fila[0]; // Marca temporal
+                    
+                    if (numeroEquipo && tipo) {
+                        // Guardar solo el registro más reciente por equipo
+                        if (!estadosEquipos[numeroEquipo] || 
+                            new Date(timestamp) > new Date(estadosEquipos[numeroEquipo].timestamp)) {
+                            estadosEquipos[numeroEquipo] = {
+                                timestamp: timestamp,
+                                nombreCompleto: fila[2] || "", // Nombre Completo
+                                documento: fila[3] || "",       // Documento
+                                curso: fila[4] || "",           // Curso
+                                profesor: fila[5] || "",        // Profesor Encargado
+                                materia: fila[6] || "",         // Materia
+                                tipo: tipo                      // Tipo
+                            };
+                        }
+                    }
+                }
             });
+            
+            // Aplicar solo los equipos que están en "Préstamo" (último registro)
+            Object.entries(estadosEquipos).forEach(([numeroEquipo, estado]) => {
+                if (estado.tipo === "Préstamo") {
+                    const item = items.find(i => i.nombre === numeroEquipo);
+                    if (item) {
+                        Object.assign(item, {
+                            documento: estado.documento,
+                            profesor: estado.profesor,
+                            materia: estado.materia,
+                            nombreCompleto: estado.nombreCompleto,
+                            curso: estado.curso
+                        });
+                    }
+                }
+            });
+            
             actualizarVista();
         } catch (error) { 
             console.error("Error al cargar equipos:", error); 
@@ -26,13 +76,13 @@ const api = {
 
     async buscarEstudiante(documento) {
         try {
-            console.log('Buscando documento:', documento); // Debug
+            console.log('Buscando documento:', documento);
             
             const url = `${SCRIPT_URL}?action=getBaseA&documento=${encodeURIComponent(documento)}`;
-            console.log('URL de búsqueda:', url); // Debug
+            console.log('URL de búsqueda:', url);
             
             const response = await fetch(url);
-            console.log('Response status:', response.status); // Debug
+            console.log('Response status:', response.status);
             
             if (!response.ok) {
                 console.error('Error en la respuesta:', response.status, response.statusText);
@@ -40,20 +90,20 @@ const api = {
             }
             
             const data = await response.json();
-            console.log('Datos recibidos:', data); // Debug
+            console.log('Datos recibidos:', data);
             
-            // Verificar diferentes posibles estructuras de respuesta
             if (data && (data.encontrado === true || data.encontrado === 'true')) {
                 return {
-                    nombre: data.nombre || '',
+                    nombreCompleto: data.nombreCompleto || data.nombre || '',
+                    documento: data.documento || documento,
                     curso: data.curso || '',
                     encontrado: true
                 };
             } else if (data && data.length > 0) {
-                // Por si la respuesta es un array
                 const estudiante = data[0];
                 return {
-                    nombre: estudiante.nombre || estudiante[1] || '',
+                    nombreCompleto: estudiante.nombreCompleto || estudiante.nombre || estudiante[1] || '',
+                    documento: estudiante.documento || documento,
                     curso: estudiante.curso || estudiante[2] || '',
                     encontrado: true
                 };
@@ -68,13 +118,59 @@ const api = {
         }
     },
 
-    guardar(item, action = 'saveToBaseB') {
-        const datos = {action, numeroEquipo: item.nombre, documento: item.documento, profesor: item.profesor, materia: item.materia};
-        fetch(SCRIPT_URL, {method: 'POST', mode: 'no-cors', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(datos)})
-            .catch(error => console.error("Error al guardar:", error));
+    async guardarPrestamo(item, datosEstudiante) {
+        const datos = {
+            action: 'saveToBaseB',
+            // Estructura: Marca temporal, Equipo, Nombre Completo, Documento, Curso, Profesor Encargado, Materia, Tipo
+            marcaTemporal: new Date().toISOString(),
+            equipo: item.nombre,
+            nombreCompleto: datosEstudiante.nombreCompleto || '',
+            documento: datosEstudiante.documento || item.documento,
+            curso: datosEstudiante.curso || '',
+            profesorEncargado: item.profesor,
+            materia: item.materia,
+            tipo: 'Préstamo'
+        };
+        
+        try {
+            await fetch(SCRIPT_URL, {
+                method: 'POST', 
+                mode: 'no-cors', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify(datos)
+            });
+            console.log('Préstamo registrado:', datos);
+        } catch (error) {
+            console.error("Error al guardar préstamo:", error);
+        }
     },
 
-    eliminar(numeroEquipo) { this.guardar({nombre: numeroEquipo}, 'deleteFromBaseB'); }
+    async guardarDevolucion(item) {
+        const datos = {
+            action: 'saveToBaseB',
+            // Estructura: Marca temporal, Equipo, Nombre Completo, Documento, Curso, Profesor Encargado, Materia, Tipo
+            marcaTemporal: new Date().toISOString(),
+            equipo: item.nombre,
+            nombreCompleto: item.nombreCompleto || '',
+            documento: item.documento,
+            curso: item.curso || '',
+            profesorEncargado: item.profesor,
+            materia: item.materia,
+            tipo: 'Devuelto'
+        };
+        
+        try {
+            await fetch(SCRIPT_URL, {
+                method: 'POST', 
+                mode: 'no-cors', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify(datos)
+            });
+            console.log('Devolución registrada:', datos);
+        } catch (error) {
+            console.error("Error al guardar devolución:", error);
+        }
+    }
 };
 
 // --- MODAL FUNCTIONS ---
@@ -106,7 +202,7 @@ function mostrarModalItem(itemId) {
     const container = document.getElementById('listaMetodos');
     
     document.querySelector('.modal-header h2').textContent = `Equipo ${item.nombre}`;
-    document.querySelector('.modal-body p').textContent = 'Complete la información del Equipo:';
+    document.querySelector('.modal-body p').textContent = 'Complete la información del Préstamo:';
     
     const form = document.createElement('div');
     form.style.cssText = 'display: flex; flex-direction: column; gap: 15px;';
@@ -116,13 +212,17 @@ function mostrarModalItem(itemId) {
         crearInput('materia', 'Materia', 'text', 'Ingrese la materia...', false, item.materia)
     ].join('');
 
-    // Búsqueda automática mejorada (solo para validación)
+    // Variables para almacenar datos del estudiante
+    let datosEstudiante = {};
+
+    // Búsqueda automática mejorada
     let timer;
     form.querySelector('#documento').oninput = async (e) => {
         const doc = e.target.value.trim();
         const info = document.getElementById('buscarInfo');
         
         clearTimeout(timer);
+        datosEstudiante = {}; // Reset datos
         
         if (doc.length >= 3) {
             info.textContent = 'Validando documento...';
@@ -131,22 +231,27 @@ function mostrarModalItem(itemId) {
             timer = setTimeout(async () => {
                 try {
                     const result = await api.buscarEstudiante(doc);
-                    console.log('Resultado de validación:', result); // Debug
+                    console.log('Resultado de validación:', result);
                     
                     if (result.encontrado) {
-                        info.textContent = '✓ Documento válido';
+                        datosEstudiante = {
+                            nombreCompleto: result.nombreCompleto,
+                            documento: result.documento,
+                            curso: result.curso
+                        };
+                        info.textContent = `✓ Estudiante: ${result.nombreCompleto} - Curso: ${result.curso}`;
                         info.style.color = '#28a745';
                     } else {
                         if (result.error) {
                             info.textContent = `⚠ Error: ${result.error}`;
                         } else {
-                            info.textContent = '⚠ Documento no encontrado - Registre manualmente';
+                            info.textContent = '⚠ Documento no encontrado - Verifique el número';
                         }
                         info.style.color = '#dc3545';
                     }
                 } catch (error) {
                     console.error('Error en validación:', error);
-                    info.textContent = '⚠ Error en validación - Puede continuar';
+                    info.textContent = '⚠ Error en validación - Intente nuevamente';
                     info.style.color = '#dc3545';
                 }
             }, 800);
@@ -157,15 +262,36 @@ function mostrarModalItem(itemId) {
         }
     };
 
-    form.appendChild(crearBotones('Guardar', '', () => {
+    form.appendChild(crearBotones('Registrar Préstamo', '', async () => {
         const [doc, prof, mat] = ['documento', 'profesor', 'materia'].map(id => document.getElementById(id).value.trim());
-        if (!doc || !prof || !mat) return alert('Complete todos los campos: Documento, Profesor y Materia');
         
+        if (!doc || !prof || !mat) {
+            return alert('Complete todos los campos: Documento, Profesor y Materia');
+        }
+        
+        // Verificar si encontró el estudiante
+        if (!datosEstudiante.encontrado && Object.keys(datosEstudiante).length === 0) {
+            const confirmacion = confirm('No se encontró información del estudiante. ¿Desea continuar con el registro manual?');
+            if (!confirmacion) return;
+            
+            // Datos mínimos para registro manual
+            datosEstudiante = {
+                documento: doc,
+                nombreCompleto: 'Registro Manual',
+                curso: 'Por verificar'
+            };
+        }
+        
+        // Actualizar item local
         item.documento = doc;
         item.profesor = prof;
         item.materia = mat;
+        item.nombreCompleto = datosEstudiante.nombreCompleto;
+        item.curso = datosEstudiante.curso;
         
-        api.guardar(item);
+        // Registrar préstamo en BaseB
+        await api.guardarPrestamo(item, datosEstudiante);
+        
         cerrarModal();
         actualizarVista();
     }));
@@ -182,25 +308,41 @@ function mostrarModalDesmarcar(itemId) {
     const modal = document.getElementById('modalMetodos');
     const container = document.getElementById('listaMetodos');
     
-    document.querySelector('.modal-header h2').textContent = `Desmarcar Equipo ${item.nombre}`;
-    document.querySelector('.modal-body p').textContent = 'Información del Equipo a desmarcar:';
+    document.querySelector('.modal-header h2').textContent = `Devolver Equipo ${item.nombre}`;
+    document.querySelector('.modal-body p').textContent = 'Información del Préstamo Activo:';
 
     const form = document.createElement('div');
     form.style.cssText = 'display: flex; flex-direction: column; gap: 15px;';
     form.innerHTML = `<div class="readonly-info">
-        <p><strong>Estudiante:</strong></p><div class="info-content">${item.documento || 'Sin información'}</div>
+        <p><strong>Estudiante:</strong></p><div class="info-content">${item.nombreCompleto || 'Sin información'}</div>
+        <p><strong>Documento:</strong></p><div class="info-content">${item.documento || 'Sin información'}</div>
+        <p><strong>Curso:</strong></p><div class="info-content">${item.curso || 'Sin información'}</div>
         <p><strong>Profesor(a):</strong></p><div class="info-content">${item.profesor || 'Sin profesor'}</div>
         <p><strong>Materia:</strong></p><div class="info-content">${item.materia || 'Sin materia'}</div>
     </div>
-    <div><label for="comentario">Comentario (opcional):</label>
-    <textarea id="comentario" rows="4" placeholder="Explique por qué se desmarca..."></textarea></div>`;
+    <div><label for="comentario">Comentario de Devolución (opcional):</label>
+    <textarea id="comentario" rows="4" placeholder="Observaciones sobre el estado del equipo..."></textarea></div>`;
 
-    form.appendChild(crearBotones('Desmarcar', 'delete-modal-btn', () => {
+    form.appendChild(crearBotones('Registrar Devolución', 'delete-modal-btn', async () => {
         const comentario = document.getElementById('comentario').value.trim();
-        if (confirm(`¿Deseas desmarcar el equipo ${item.nombre}?`)) {
-            api.eliminar(item.nombre);
-            Object.assign(item, {documento: "", profesor: "", materia: ""});
-            console.log(`Desmarcado: ${item.nombre}, Comentario: ${comentario}`);
+        if (confirm(`¿Confirma la devolución del equipo ${item.nombre}?`)) {
+            
+            // Registrar devolución en BaseB
+            await api.guardarDevolucion(item);
+            
+            // Limpiar item local
+            Object.assign(item, {
+                documento: "", 
+                profesor: "", 
+                materia: "",
+                nombreCompleto: "",
+                curso: ""
+            });
+            
+            if (comentario) {
+                console.log(`Devolución equipo ${item.nombre} - Comentario: ${comentario}`);
+            }
+            
             cerrarModal();
             actualizarVista();
         }
@@ -221,17 +363,26 @@ function crearGrilla() {
         return `<div class="ramo" style="background-color: ${ocupado ? '#d4edda' : '#f8f9fa'}; border-color: ${ocupado ? '#28a745' : '#ccc'};" onclick="mostrarModalItem('${item.id}')">
                     <div style="font-weight: bold;">${item.nombre}</div>
                     <div style="color: ${ocupado ? 'green' : '#6c757d'};">${ocupado ? '✓' : '○'}</div>
+                    ${ocupado ? `<div style="font-size: 0.8em; color: #666; margin-top: 5px;">${item.nombreCompleto}</div>` : ''}
                 </div>`;
     }).join('');
 }
 
 function resetearMalla() {
-    if (confirm("¿Estás seguro de resetear todos los equipos?")) {
-        items.forEach(item => {
-            if (item.documento) api.eliminar(item.nombre);
-            Object.assign(item, {documento: "", profesor: "", materia: ""});
+    if (confirm("⚠️ ATENCIÓN: Esto registrará la devolución de TODOS los equipos prestados. ¿Estás seguro?")) {
+        items.forEach(async item => {
+            if (item.documento) {
+                await api.guardarDevolucion(item);
+                Object.assign(item, {
+                    documento: "", 
+                    profesor: "", 
+                    materia: "",
+                    nombreCompleto: "",
+                    curso: ""
+                });
+            }
         });
-        actualizarVista();
+        setTimeout(actualizarVista, 1000); // Dar tiempo para que se procesen las devoluciones
     }
 }
 
