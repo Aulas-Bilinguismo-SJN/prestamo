@@ -19,14 +19,53 @@ const api = {
                 if (item && fila.length >= 4) Object.assign(item, {documento: fila[1] || "", profesor: fila[2] || "", materia: fila[3] || ""});
             });
             actualizarVista();
-        } catch (error) { console.error("Error al cargar equipos:", error); }
+        } catch (error) { 
+            console.error("Error al cargar equipos:", error); 
+        }
     },
 
     async buscarEstudiante(documento) {
         try {
-            const data = await fetch(`${SCRIPT_URL}?action=getBaseA&documento=${encodeURIComponent(documento)}`).then(r => r.json());
-            return data?.encontrado ? {nombre: data.nombre, curso: data.curso, encontrado: true} : {encontrado: false};
-        } catch { return {encontrado: false}; }
+            console.log('Buscando documento:', documento); // Debug
+            
+            const url = `${SCRIPT_URL}?action=getBaseA&documento=${encodeURIComponent(documento)}`;
+            console.log('URL de búsqueda:', url); // Debug
+            
+            const response = await fetch(url);
+            console.log('Response status:', response.status); // Debug
+            
+            if (!response.ok) {
+                console.error('Error en la respuesta:', response.status, response.statusText);
+                return {encontrado: false, error: 'Error en la respuesta del servidor'};
+            }
+            
+            const data = await response.json();
+            console.log('Datos recibidos:', data); // Debug
+            
+            // Verificar diferentes posibles estructuras de respuesta
+            if (data && (data.encontrado === true || data.encontrado === 'true')) {
+                return {
+                    nombre: data.nombre || '',
+                    curso: data.curso || '',
+                    encontrado: true
+                };
+            } else if (data && data.length > 0) {
+                // Por si la respuesta es un array
+                const estudiante = data[0];
+                return {
+                    nombre: estudiante.nombre || estudiante[1] || '',
+                    curso: estudiante.curso || estudiante[2] || '',
+                    encontrado: true
+                };
+            } else {
+                console.log('Estudiante no encontrado para documento:', documento);
+                return {encontrado: false};
+            }
+            
+        } catch (error) {
+            console.error('Error al buscar estudiante:', error);
+            return {encontrado: false, error: error.message};
+        }
     },
 
     guardar(item, action = 'saveToBaseB') {
@@ -73,48 +112,56 @@ function mostrarModalItem(itemId) {
     form.style.cssText = 'display: flex; flex-direction: column; gap: 15px;';
     form.innerHTML = [
         crearInput('documento', 'Documento del Estudiante', 'text', 'Ingrese el número de documento...'),
-        crearInput('nombreEstudiante', 'Nombre del Estudiante', 'text', 'Se completará automáticamente o ingrese manualmente...'),
-        crearInput('curso', 'Curso', 'text', 'Se completará automáticamente o ingrese manualmente...'),
         crearInput('profesor', 'Profesor(a) Encargado', 'text', 'Ingrese el nombre del profesor(a)...', false, item.profesor),
         crearInput('materia', 'Materia', 'text', 'Ingrese la materia...', false, item.materia)
     ].join('');
 
-    // Búsqueda automática
+    // Búsqueda automática mejorada (solo para validación)
     let timer;
-    form.querySelector('#documento').oninput = (e) => {
+    form.querySelector('#documento').oninput = async (e) => {
         const doc = e.target.value.trim();
         const info = document.getElementById('buscarInfo');
-        const [nombre, curso] = [document.getElementById('nombreEstudiante'), document.getElementById('curso')];
         
         clearTimeout(timer);
+        
         if (doc.length >= 3) {
-            info.textContent = 'Buscando estudiante...';
+            info.textContent = 'Validando documento...';
             info.style.color = '#ffc107';
+            
             timer = setTimeout(async () => {
-                const result = await api.buscarEstudiante(doc);
-                if (result.encontrado) {
-                    nombre.value = result.nombre;
-                    curso.value = result.curso;
-                    info.textContent = '✓ Estudiante encontrado';
-                    info.style.color = '#28a745';
-                } else {
-                    nombre.value = curso.value = '';
-                    info.textContent = '⚠ Estudiante no encontrado - puede continuar manualmente';
+                try {
+                    const result = await api.buscarEstudiante(doc);
+                    console.log('Resultado de validación:', result); // Debug
+                    
+                    if (result.encontrado) {
+                        info.textContent = '✓ Documento válido';
+                        info.style.color = '#28a745';
+                    } else {
+                        if (result.error) {
+                            info.textContent = `⚠ Error: ${result.error}`;
+                        } else {
+                            info.textContent = '⚠ Documento no encontrado - puede continuar';
+                        }
+                        info.style.color = '#dc3545';
+                    }
+                } catch (error) {
+                    console.error('Error en validación:', error);
+                    info.textContent = '⚠ Error en validación - puede continuar';
                     info.style.color = '#dc3545';
                 }
-            }, 500);
+            }, 800);
+            
         } else if (!doc.length) {
-            nombre.value = curso.value = '';
             info.textContent = 'Ingrese el documento para buscar automáticamente';
             info.style.color = '#6c757d';
         }
     };
 
     form.appendChild(crearBotones('Guardar', '', () => {
-        const [doc, nom, cur, prof, mat] = ['documento', 'nombreEstudiante', 'curso', 'profesor', 'materia'].map(id => document.getElementById(id).value.trim());
-        if (!doc || !prof || !mat) return alert('Complete al menos: Documento, Profesor y Materia');
+        const [doc, prof, mat] = ['documento', 'profesor', 'materia'].map(id => document.getElementById(id).value.trim());
+        if (!doc || !prof || !mat) return alert('Complete todos los campos: Documento, Profesor y Materia');
         
-        item.documento = doc + (nom ? ` - ${nom}` : '') + (cur ? ` (${cur})` : '');
+        item.documento = doc;
         item.profesor = prof;
         item.materia = mat;
         
