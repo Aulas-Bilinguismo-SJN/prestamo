@@ -259,5 +259,5 @@ window.onclick = e => e.target === document.getElementById('modalMetodos') && ce
 document.addEventListener('keydown', e => e.key === 'Escape' && cerrarModal());
 document.addEventListener('DOMContentLoaded', () => {
     api.cargarEquipos();
-    setInterval(api.cargarEquipos, 30000);
+    setInterval(api.cargarEquipos, 2000);
 });
