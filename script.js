@@ -51,7 +51,14 @@ const api = {
             const response = await fetch(`${SCRIPT_URL}?action=getBaseA&documento=${encodeURIComponent(documento)}`);
             const data = await response.json();
             
-            console.log('Respuesta completa de la API:', data); // Para debug
+            console.log('=== DEBUG BUSCAR ESTUDIANTE ===');
+            console.log('Documento buscado:', documento);
+            console.log('URL completa:', `${SCRIPT_URL}?action=getBaseA&documento=${encodeURIComponent(documento)}`);
+            console.log('Status de respuesta:', response.status);
+            console.log('Respuesta completa de la API:', data);
+            console.log('Tipo de data.encontrado:', typeof data.encontrado);
+            console.log('Valor de data.encontrado:', data.encontrado);
+            console.log('=== FIN DEBUG ===');
             
             // Tu API retorna directamente {encontrado: true/false, documento, nombreCompleto, curso}
             if (data && data.encontrado === true) {
@@ -260,3 +267,14 @@ document.addEventListener('DOMContentLoaded', () => {
     api.cargarEquipos();
     setInterval(api.cargarEquipos, 30000);
 });
+
+
+const items = Array.from({length: 50}, (_, i) => ({
+    id: `item_${i+1}`,
+    nombre: `${i+1}`,
+    documento: "",
+    profesor: "",
+    materia: "",
+    nombreCompleto: "",
+    curso: ""
+}));
