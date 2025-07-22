@@ -135,13 +135,13 @@ function mostrarModalItem(itemId) {
     const divNombreEstudiante = document.createElement('div');
     divNombreEstudiante.innerHTML = `
         <label for="nombreEstudiante">Nombre del Estudiante:</label>
-        <input type="text" id="nombreEstudiante" readonly placeholder="Se completará automáticamente...">
+        <input type="text" id="nombreEstudiante" placeholder="Se completará automáticamente o ingrese manualmente...">
     `;
 
     const divCurso = document.createElement('div');
     divCurso.innerHTML = `
         <label for="curso">Curso:</label>
-        <input type="text" id="curso" readonly placeholder="Se completará automáticamente...">
+        <input type="text" id="curso" placeholder="Se completará automáticamente o ingrese manualmente...">
     `;
 
     const divProfesor = document.createElement('div');
@@ -165,7 +165,7 @@ function mostrarModalItem(itemId) {
     btnGuardar.textContent = 'Guardar';
     btnGuardar.style.backgroundColor = '#007bff';
     btnGuardar.style.color = 'white';
-    btnGuardar.disabled = true; // Deshabilitado hasta que se encuentre el estudiante
+    btnGuardar.disabled = false; // Habilitado por defecto
 
     const btnCancelar = document.createElement('button');
     btnCancelar.textContent = 'Cancelar';
@@ -194,22 +194,23 @@ function mostrarModalItem(itemId) {
                         cursoInput.value = resultado.curso;
                         infoElement.textContent = '✓ Estudiante encontrado';
                         infoElement.style.color = '#28a745';
-                        btnGuardar.disabled = false;
                     } else {
                         nombreInput.value = '';
                         cursoInput.value = '';
-                        infoElement.textContent = '⚠ Estudiante no encontrado en la base de datos';
+                        infoElement.textContent = '⚠ Estudiante no encontrado - puede continuar manualmente';
                         infoElement.style.color = '#dc3545';
-                        btnGuardar.disabled = true;
                     }
+                }).catch(error => {
+                    console.error('Error en búsqueda:', error);
+                    infoElement.textContent = '⚠ Error en búsqueda - puede continuar manualmente';
+                    infoElement.style.color = '#dc3545';
                 });
             }, 500); // Esperar 500ms después de que el usuario deje de escribir
-        } else {
+        } else if (documento.length === 0) {
             nombreInput.value = '';
             cursoInput.value = '';
             infoElement.textContent = 'Ingrese el documento para buscar automáticamente el estudiante';
             infoElement.style.color = '#6c757d';
-            btnGuardar.disabled = true;
         }
     });
 
@@ -220,13 +221,22 @@ function mostrarModalItem(itemId) {
         const profesor = document.getElementById('profesor').value.trim();
         const materia = document.getElementById('materia').value.trim();
 
-        if (!documento || !nombreEstudiante || !profesor || !materia) {
-            alert('Por favor complete todos los campos obligatorios');
+        if (!documento || !profesor || !materia) {
+            alert('Por favor complete al menos: Documento, Profesor y Materia');
             return;
         }
 
-        // Actualizar el item con la información del estudiante encontrado
-        item.documento = `${documento} - ${nombreEstudiante} (${curso})`;
+        // Construir la información del estudiante
+        let infoEstudiante = documento;
+        if (nombreEstudiante) {
+            infoEstudiante += ` - ${nombreEstudiante}`;
+        }
+        if (curso) {
+            infoEstudiante += ` (${curso})`;
+        }
+
+        // Actualizar el item
+        item.documento = infoEstudiante;
         item.profesor = profesor;
         item.materia = materia;
 
